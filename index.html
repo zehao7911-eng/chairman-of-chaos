@@ -280,8 +280,8 @@ class OfficeView{
   this.mesh(this.base,new T.CylinderGeometry(.13,.17,.67,12),0x536d79,0,.79,0);
   this.mount=this.group(w,0,1.14,0);
   this.buildMount(this.mount,EPISODES[index].mount);
-  this.seatOffset=({chair:.20,printer:.336,mug:.43,plant:.45,throne:.20,disco:.335})[EPISODES[index].mount]-.51;
-  this.hero=this.person(0x426b79,0x493a32,true);
+  this.seatOffset=({chair:.20,printer:.336,mug:.43,plant:.45,throne:.20,disco:.49})[EPISODES[index].mount]-.51;
+  this.hero=this.person(0x426b79,0x493a32,true,EPISODES[index].mount);
   this.mount.add(this.hero);
   this.hero.position.set(0,this.seatOffset,0);
   this.heroShadow=this.shadow(w,0,.10,1.24,1.0,.283);
@@ -323,7 +323,7 @@ class OfficeView{
   }
   p.scale.setScalar(scale);
  }
- person(shirt,hair,seated){
+ person(shirt,hair,seated,mount='chair'){
   const p=new T.Group(),skin=0xd5a280,navy=0x2a4352;
   const torso=this.group(p,0,seated?.72:1.05,0);
   this.oval(torso,0,.20,0,.31,.41,.205,shirt);
@@ -356,18 +356,21 @@ class OfficeView{
   this.box(torso,0,.813,.248,.081,.027,.036,0x374d56);
   this.oval(torso,0,.733,.251,.050,.031,.050,skin);
   const mouth=this.oval(torso,0,.659,.209,.050,.011,.022,0x89533f);
-  const feet=[];
+  const feet=[],legMeshes=[];
+  // Feet stay outside each actual mount envelope. Counterlean is above the hips.
+  const [kneeZ,ankleZ]=({chair:[.57,.60],throne:[.57,.60],printer:[.62,.65],mug:[.72,.76],plant:[.74,.78],disco:[.60,.85]})[mount];
   for(const side of [-1,1]){
    const hip=vec(side*.146,seated?.70:.85,0);
-   const knee=vec(side*.20,seated?.63:.45,seated?.39:.02);
-   const ankle=vec(side*.20,.15,seated?.39:.04);
-   this.link(p,hip,knee,.119,navy);this.link(p,knee,ankle,.100,navy);
-   this.box(p,side*.20,.045,seated?.49:.11,.235,.065,.36,0x172e3b);
-   feet.push(this.oval(p,side*.20,.11,seated?.49:.11,.118,.095,.181,0x314955));
-   for(let j=0;j<2;j++)this.box(p,side*.20,.19-j*.016,seated?.47-j*.038:.09-j*.038,.106,.012,.013,0x718785);
+   const knee=vec(side*.20,seated?.63:.45,seated?kneeZ:.02);
+   const ankle=vec(side*.20,.15,seated?ankleZ:.04);
+   legMeshes.push(this.link(p,hip,knee,.119,navy),this.link(p,knee,ankle,.100,navy));
+   const shoe=this.group(p,side*.20,0,seated?ankleZ+.10:.11);
+   legMeshes.push(this.box(shoe,0,.045,0,.235,.065,.36,0x172e3b));
+   const foot=this.oval(shoe,0,.11,0,.118,.095,.181,0x314955);feet.push(foot);legMeshes.push(foot);
+   for(let j=0;j<2;j++)legMeshes.push(this.box(shoe,0,.19-j*.016,-.02-j*.038,.106,.012,.013,0x718785));
   }
   const jacket=[];torso.traverse(object=>{if(object.isMesh&&object.material.color.getHex()===shirt)jacket.push(object)});
-  p.userData={torso,feet,arms,brows,tie,mouth,jacket};
+  p.userData={torso,feet,arms,brows,tie,mouth,jacket,legMeshes};
   return p;
  }
  buildMount(p,type){
@@ -395,9 +398,10 @@ class OfficeView{
    this.box(p,0,.04,0,1.07,.42,.92,0xe2e5d9);
    this.box(p,0,.271,-.09,1.02,.075,.69,0x374e5a);
    this.box(p,0,.316,-.10,.87,.04,.52,0xb1cebe);
-   this.box(p,0,.03,.472,.73,.115,.03,0x334e5a);
-   this.box(p,0,-.03,.63,.72,.045,.32,0x6e898a);
-   this.features.push(this.box(p,0,.03,.60,.60,.014,.23,0xf8f2dc));
+   // Side output keeps the sheet and tray out of the rider's footwell.
+   this.box(p,-.546,.03,0,.03,.115,.73,0x334e5a);
+   this.box(p,-.69,-.03,0,.32,.045,.72,0x6e898a);
+   this.features.push(this.box(p,-.68,.03,0,.23,.014,.60,0xf8f2dc));
    for(let i=0;i<3;i++)this.oval(p,.40,.12+i*.072,.481,.021,.021,.010,[0x8ed8a9,0xeac06a,0xe38468][i]);
   }else if(type==='mug'){
    this.mesh(p,new T.CylinderGeometry(.57,.49,.67,20),0xe8b467,0,.05,0);
@@ -411,6 +415,7 @@ class OfficeView{
    this.mesh(p,new T.CylinderGeometry(.55,.55,.025,10),0x555c43,0,.391,0);
    this.box(p,0,.42,0,.64,.06,.56,0xc3b18b);
    for(let i=0;i<6;i++){
+    if(i===0)continue; // An open front channel for both legs.
     const a=i*Math.PI/3;
     const leaf=this.oval(p,Math.sin(a)*.63,.52,Math.cos(a)*.63,.15,.40,.10,0x5b9979);
     leaf.rotation.set(.52*Math.sin(a),a,.52*Math.cos(a));this.features.push(leaf);
@@ -422,8 +427,9 @@ class OfficeView{
     const a=i*Math.PI/6;
     this.features.push(this.box(p,Math.sin(a)*.62,.14,Math.cos(a)*.62,.18,.065,.18,colors[i%4]));
    }
-   this.box(p,0,.24,0,.65,.19,.61,0x95bdab);
-   this.box(p,0,.60,-.37,.69,.69,.13,0x69888f);
+   this.box(p,0,.29,0,.27,.31,.26,0x69888f);
+   this.box(p,0,.40,0,.65,.18,.61,0x95bdab);
+   this.box(p,0,.75,-.37,.69,.69,.13,0x69888f);
   }
  }
  render(round,reward,reduced,dt){
@@ -436,13 +442,15 @@ class OfficeView{
   this.mount.rotation.set(playing?buck:0,playing?Math.sin(t*1.2)*.12:0,playing?-tilt*.65:0);
   this.mount.position.y=1.14+(playing?Math.abs(buck)*.35:0);
   this.hero.position.set(0,this.seatOffset,0);
-  this.hero.rotation.set(0,0,playing?-round.input*.17:0);
-  this.hero.userData.torso.rotation.z=playing?-round.input*.16:0;
+  this.hero.rotation.set(0,0,0);
+  this.hero.userData.torso.rotation.z=playing?-round.input*.28:0;
   if(round.phase==='tumble'||round.phase==='result'&&round.result&&!round.result.win){
    const u=round.phase==='result'?1:clamp(round.effect/1.3,0,1);
+   const travel=clamp((u-.18)/.82,0,1),flight=travel*travel*(3-2*travel);
    this.mount.rotation.z=(1-u)*-tilt*.65;
-   this.hero.position.set(2.27*u,this.seatOffset+Math.sin(u*Math.PI)*1.24-u*.51,.65*u);
-   this.hero.rotation.set(-.30*u,0,-u*1.15);
+   // Clear the seat and foliage vertically before rotating toward the soft mat.
+   this.hero.position.set(2.27*flight,this.seatOffset+Math.sin(u*Math.PI)*1.65-u*.51,.65*flight);
+   this.hero.rotation.set(-.30*flight,0,-flight*1.15);
    this.hero.userData.torso.rotation.z=0;
   }
   if(round.phase==='celebrate'||round.phase==='result'&&round.result?.win){
@@ -471,7 +479,7 @@ class OfficeView{
   if((round.recoveries||0)>this.lastRecovery)this.recoveryFlash=.8;
   this.lastRecovery=round.recoveries||0;this.recoveryFlash=Math.max(0,this.recoveryFlash-dt);
   this.features.forEach((object,i)=>{
-   if(EPISODES[round.index].mount==='printer')object.position.z=.60+(playing&&!reduced?Math.sin(t*8)*.11:0);
+   if(EPISODES[round.index].mount==='printer')object.position.x=-.68+(playing&&!reduced?Math.sin(t*8)*.11:0);
    if(EPISODES[round.index].mount==='mug')object.scale.y=reduced?1:1+Math.sin(t*4+i)*.23;
    if(EPISODES[round.index].mount==='plant')object.rotation.z=(reduced?0:Math.sin(t*4+i)*.14);
    if(EPISODES[round.index].mount==='disco')object.material=this.mat([0xe49b8c,0xcab87c,0x7bb4ae,0x9d8cbe][(i+(reduced?0:Math.floor(this.elapsed*3)))%4]);
