@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#253a47"><meta name="description" content="One finger. Six questionable office decisions. A tiny 3D office rodeo."><title>Chairman of Chaos</title><link rel="stylesheet" href="style.css"></head>
+<body><main id="game" aria-label="Chairman of Chaos"><div id="stage" aria-hidden="true"></div><div class="shade"></div>
+<header><div class="brand">CHAIRMAN<br><span>OF CHAOS</span></div><div id="chapter"></div><button id="menu" aria-label="Open settings">Ⅱ</button></header>
+<div id="hud" hidden><div><small id="job"></small><strong id="time"></strong></div><div class="progress"><i id="progress"></i></div></div>
+<div id="toast" aria-live="polite"></div><section id="panel" aria-live="polite"></section>
+<div id="controls" hidden><div class="balance" aria-label="Balance meter"><span class="green"></span><i id="dot"></i></div><div class="steer"><button id="left" aria-label="Lean left">‹</button><div id="pad" role="slider" aria-label="Lean" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0" tabindex="0"><i id="thumb"></i><span>DRAG TO LEAN</span></div><button id="right" aria-label="Lean right">›</button></div><small>Keep the dot inside mint.</small></div>
+<div class="rotate">↻<strong>Turn your phone upright</strong></div></main><script src="vendor/three.min.js"></script><script type="module" src="app.mjs"></script></body></html>
