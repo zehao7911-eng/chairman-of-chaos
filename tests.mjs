@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {EPISODES,profile,newRound,restoreRound,begin,tick,settle,saveRound,disturbance,clamp} from './core.mjs';
+import {EPISODES,profile,newRound,restoreRound,begin,tick,settle,saveRound,disturbance,clamp,balanceCue} from './core.mjs';
 import {ChairHost} from './sdk.mjs';
 let checks=0;
 const check=(condition,message)=>{assert.ok(condition,message);checks++};
@@ -23,6 +23,19 @@ for(let i=0;i<EPISODES.length;i++){
 }
 const lost=newRound(4);ride(lost,()=>0);
 check(!lost.result.win,'no input eventually ejects player');
+for(let i=0;i<6;i++){
+ const r=newRound(i);ride(r,r=>r.input+(balanceCue(r).direction*.66-r.input)*(1-Math.exp(-18/90)));
+ check(r.result.win,'following the visible direction cue alone clears each ride');
+ check(r.result.bestStreak>1.8,'stable play records a real streak');
+}
+const rescue=newRound();begin(rescue);rescue.angle=.7;tick(rescue,.01);
+check(rescue.atRisk&&balanceCue(rescue).direction===-1,'right tilt clearly requests left correction');
+rescue.angle=.1;rescue.velocity=0;tick(rescue,.01);tick(rescue,.01);
+check(rescue.recoveries===1&&!rescue.atRisk,'recovery reward triggers once after returning safely');
+const old=restoreRound({index:0,phase:'ride',t:3,steady:2,angle:.2},profile());
+check(old.bestStreak===0&&old.recoveries===0&&old.t===3,'old checkpoint remains compatible');
+const keep=restoreRound(saveRound({...rescue,t:3,streak:2,bestStreak:2.4}),profile());
+check(keep.streak===2&&keep.bestStreak===2.4&&keep.recoveries===1,'new feedback stats survive checkpoint reload');
 const resumed=newRound();begin(resumed);for(let i=0;i<190;i++){resumed.input=smart(resumed);tick(resumed,1/90)}
 const saved=saveRound(resumed);const restored=restoreRound(saved,profile());
 check(restored.phase==='ready'&&restored.t===saved.t&&restored.input===0,'checkpoint restores neutral ready pose');

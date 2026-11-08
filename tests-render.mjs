@@ -3,7 +3,7 @@ import {createRequire} from 'node:module';
 import {EPISODES,newRound,begin,tick,disturbance,clamp} from './core.mjs';
 const require=createRequire(import.meta.url),T=require('./vendor/three.min.js');
 globalThis.window={THREE:T};
-const context=new Proxy({}, {get:()=>()=>{}});
+const context=new Proxy({}, {get:(_,key)=>key==='createRadialGradient'?()=>({addColorStop(){}}):()=>{}});
 globalThis.document={createElement:()=>({getContext:()=>context})};
 const {OfficeView}=await import('./view.mjs');
 const view=Object.assign(Object.create(OfficeView.prototype),{

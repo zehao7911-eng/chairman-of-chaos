@@ -1,4 +1,4 @@
-import {EPISODES,clamp,profile,newRound,restoreRound,begin,tick,settle,neutralize,saveRound} from './core.mjs';
+import {EPISODES,clamp,profile,newRound,restoreRound,begin,tick,settle,neutralize,saveRound,balanceCue} from './core.mjs';
 import {OfficeView} from './view.mjs';
 import {ChairHost} from './sdk.mjs';
 import {OfficeMusic} from './music.mjs';
@@ -12,7 +12,7 @@ const valid=value=>value?.game==='chairman-of-chaos'&&value.v===1&&value.profile
 let progress=profile(valid(disk)?disk.profile:undefined);
 let round=restoreRound(valid(disk)?disk.round:null,progress);
 let home=true,paused=false,settings=false,dirty=false,view,audio,music;
-let last=0,checkpoint=0,toastUntil=0,pointer=null,keyboard=0,held=0,support={};
+let last=0,checkpoint=0,toastUntil=0,pointer=null,keyboard=0,held=0,targetInput=0,support={},seenTier=0,seenRecovery=0;
 function snapshot(){return {game:'chairman-of-chaos',v:1,profile:progress,round:saveRound(round)}}
 const host=new ChairHost(window,{
  status(value){support=value;if(settings)drawPanel()},
@@ -61,6 +61,7 @@ const button=(label,id,style='primary',icon='→')=>'<button type="button" class
 function drawPanel(){
  const e=EPISODES[round.index];
  $('chapter').textContent=(round.index+1)+' / '+EPISODES.length;
+ $('acts').innerHTML=EPISODES.map((act,i)=>'<i class="'+(i===round.index?'current':i<=progress.unlocked?'seen':'')+'" aria-label="Shift '+(i+1)+'"></i>').join('');
  $('menu').setAttribute('aria-label',round.phase==='ride'&&!home?'Pause':'Open settings');
  $('hud').hidden=home||round.phase==='ready'||round.phase==='result'||settings;
  $('controls').hidden=home||paused||settings||round.phase!=='ride';
@@ -78,19 +79,19 @@ function drawPanel(){
    button(round.phase==='result'?'Continue the chaos':round.t?'Resume shift':'Clock in','enter')+
    '<div class="row">'+button('Settings','settings','secondary','♪')+'</div>';
  }else if(round.phase==='ready'){
-  html='<small>Shift '+(round.index+1)+' / 6</small><h2>'+e.name+'</h2><p>Stay balanced for '+e.duration+' seconds. Drag against the wobble.</p>'+button(round.t?'Resume rodeo':'Take a seat','start');
+  html='<small>Shift '+(round.index+1)+' / 6 · '+e.duration+' seconds</small><h2>'+e.name+'</h2><p>Follow the arrow. Lean against the wobble.</p>'+button(round.t?'Resume rodeo':'Take a seat','start');
  }else if(round.phase==='result'){
   const last=round.index===EPISODES.length-1;
   html='<small>SHIFT '+(round.index+1)+' COMPLETE</small><h2>'+(last?'Clocking out.':round.result.win?'Still employed.':'Unexpected promotion.')+'</h2>'+
    '<div class="stars" aria-label="'+round.result.stars+' stars">'+'★'.repeat(round.result.stars)+'☆'.repeat(3-round.result.stars)+'</div>'+
-   '<p>'+e.quip+'</p><div class="receipt"><span>STEADY<b>'+Math.round(round.result.steady*100)+'%</b></span><span>BEST<b>'+progress.best[round.index]+' / 3</b></span></div>'+
+   '<p>'+e.quip+'</p><div class="receipt"><span>STEADY<b>'+Math.round(round.result.steady*100)+'%</b></span><span>BEST STREAK<b>'+Number(round.result.bestStreak||0).toFixed(1)+' s</b></span><span>BEST<b>'+progress.best[round.index]+' / 3</b></span></div>'+
    button(last?'New shift':'Next questionable seat',last?'restart':'next')+
    '<div class="row">'+button('Retry','retry','secondary','↻')+button('Settings','settings','secondary','♪')+'</div>';
  }
  $('panel').innerHTML=html;
 }
 function release(){
- pointer=null;held=0;keyboard=0;neutralize(round);
+ pointer=null;held=0;keyboard=0;targetInput=0;neutralize(round);
 }
 function freeze(){
  release();music?.update(false);
@@ -107,7 +108,9 @@ $('panel').addEventListener('click',event=>{
  if(id==='resume'){settings=false;paused=false;drawPanel();return}
  if(id==='enter'){home=false;drawPanel();return}
  if(id==='start'&&begin(round)){
-  host.connect();host.start();save();sound([330,440]);home=false;drawPanel();return;
+  seenTier=balanceCue(round).tier;seenRecovery=round.recoveries||0;
+  const jingles=[[330,440],[740,440,740],[220,330,440],[390,520,650],[330,415,495,660],[440,660,550,880]];
+  host.connect();host.start();save();sound(jingles[round.index],round.index===1?'square':'triangle');home=false;drawPanel();return;
  }
  if(round.phase!=='result')return;
  if(id==='next'&&round.index<EPISODES.length-1)round=newRound(round.index+1);
@@ -123,7 +126,7 @@ $('menu').addEventListener('click',()=>{
 const pad=$('pad');
 function inputAt(event){
  const rect=pad.getBoundingClientRect();
- round.input=clamp((event.clientX-rect.left)/rect.width*2-1);
+ targetInput=clamp((event.clientX-rect.left)/rect.width*2-1);
 }
 pad.addEventListener('pointerdown',event=>{
  if(round.phase!=='ride'||paused)return;
@@ -134,13 +137,13 @@ for(const name of ['pointerup','pointercancel','lostpointercapture'])pad.addEven
 for(const [id,direction] of [['left',-1],['right',1]]){
  $(id).addEventListener('pointerdown',event=>{
   if(round.phase!=='ride'||paused)return;
-  unlock();held=direction*.66;round.input=held;$(id).setPointerCapture(event.pointerId);
+  unlock();held=direction*.66;targetInput=held;$(id).setPointerCapture(event.pointerId);
  });
  for(const eventName of ['pointerup','pointercancel','lostpointercapture'])$(id).addEventListener(eventName,release);
 }
 window.addEventListener('keydown',event=>{
  if(event.repeat||!['ArrowLeft','ArrowRight','a','d'].includes(event.key)||round.phase!=='ride'||paused)return;
- event.preventDefault();unlock();keyboard=event.key==='ArrowLeft'||event.key==='a'?-.66:.66;round.input=keyboard;
+ event.preventDefault();unlock();keyboard=event.key==='ArrowLeft'||event.key==='a'?-.66:.66;targetInput=keyboard;
 });
 window.addEventListener('keyup',event=>{if(['ArrowLeft','ArrowRight','a','d'].includes(event.key))release()});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)freeze()});
@@ -154,8 +157,15 @@ function frame(now){
  music?.update(progress.music&&!paused&&!settings&&!home&&round.phase==='ride');
  if(toastUntil&&now>toastUntil){$('toast').textContent='';toastUntil=0}
  if(!home&&!paused&&!settings){
-  if(held||keyboard)round.input=held||keyboard;
+  if(held||keyboard)targetInput=held||keyboard;
+  if(round.phase==='ride')round.input+=(targetInput-round.input)*(1-Math.exp(-dt*18));
   const e=tick(round,dt);
+  const cue=balanceCue(round);
+  if(round.phase==='ride'){
+   if(cue.tier>seenTier){sound([460+cue.tier*90,680+cue.tier*70]);toast(['','NICE & STEADY','SMOOTH OPERATOR','UNSHAKEABLE'][cue.tier]);}
+   if(round.recoveries>seenRecovery){toast('SAVED IT!');sound([340,570,760]);navigator.vibrate?.(12)}
+   seenTier=cue.tier;seenRecovery=round.recoveries;
+  }
   if(e==='finish'){
    settle(round,progress);host.end();release();save();music?.update(false);drawPanel();
    toast(round.result.win?'EMPLOYEE OF THE MINUTE':EPISODES[round.index].quip);
@@ -171,6 +181,15 @@ function frame(now){
  $('dot').style.left=(50+clamp(round.angle)*45)+'%';
  $('dot').style.background=Math.abs(round.angle)>.70?'#c96c59':'#334c56';
  $('thumb').style.left=(50+round.input*34)+'%';
+ const cue=balanceCue(round);
+ $('game').style.setProperty('--danger',cue.danger.toFixed(2));
+ $('left').classList.toggle('suggested',cue.direction===-1);
+ $('right').classList.toggle('suggested',cue.direction===1);
+ $('left').classList.toggle('pressed',round.input<-.15);
+ $('right').classList.toggle('pressed',round.input>.15);
+ $('cue').textContent=cue.direction<0?'‹ LEAN LEFT':cue.direction>0?'LEAN RIGHT ›':cue.tier?'STEADY ×'+cue.tier:'STAY CENTERED';
+ $('cue').dataset.mode=cue.danger>.4?'danger':cue.direction?'correct':'steady';
+ $('streak').style.width=clamp((round.streak||0)/5.4,0,1)*100+'%';
  pad.setAttribute('aria-valuenow',Math.round(round.input*100));
  const outfit=progress.ember?'ember':progress.aurora?'aurora':null;
  view.render(round,outfit,reduced.matches,paused?0:dt);
